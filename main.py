@@ -190,7 +190,7 @@ def get_new_assignments(result_monitor, input_numbers):
     return assignments
 
 
-# -----------------------------
+# ------------------------------
 # Load MNIST
 # -----------------------------
 
