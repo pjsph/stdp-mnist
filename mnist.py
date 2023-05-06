@@ -1,6 +1,22 @@
 import gzip as gz
 
 def get_labeled_data(only = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], train = True):
+    """Get MNIST images and labels
+
+    Parameters
+    ----------
+    only
+        Array of numbers to sort the images
+    train : bool
+        Whether to load training or testing set
+
+    Returns
+    -------
+    to_return_images
+        Array of 28x28 2D arrays storing the grey-levels of the MNIST images
+    to_return_images
+        Array storing the actual numbers that the images are representing
+    """
     if train:
         images_path = 'MNIST/train-images-idx3-ubyte.gz'
         labels_path = 'MNIST/train-labels-idx1-ubyte.gz'

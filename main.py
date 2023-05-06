@@ -5,6 +5,13 @@ import brian2tools as b2tools
 import numpy as np
 
 def visualize_connectivity(S):
+    """Plot synapses stored in S
+
+    Parameters
+    ----------
+    S : b2.Synapses
+        Synapses object to plot
+    """
     Ns = len(S.source)
     Nt = len(S.target)
     b2.figure(figsize=(10, 4))
@@ -27,6 +34,18 @@ def visualize_connectivity(S):
 
 
 def get_matrix_from_file(filename):
+    """Load a weight matrix from hard disk
+
+    Parameters
+    ----------
+    filename : str
+        The file path
+
+    Returns
+    -------
+    value_arr
+        A 2D array representing the weight matrix
+    """
     offset = 4
     if filename[-4-offset] == 'X':
         n_src = n_input
@@ -53,6 +72,13 @@ def get_matrix_from_file(filename):
 
 
 def save_connections(ending = ''):
+    """Save weight matrices
+
+    Parameters
+    ----------
+    ending : str
+        The suffix to add at the end of the file name
+    """
     print('Saving connections...')
     conn_matrix = np.copy(synapses_input.w).reshape((n_input, n_e))
     matrix_input = [(i, j, conn_matrix[i,j]) for i in range(conn_matrix.shape[0]) for j in range(conn_matrix.shape[1])]
@@ -61,11 +87,26 @@ def save_connections(ending = ''):
     
 
 def save_theta(ending = ''):
+    """Save theta value
+
+    Parameters
+    ----------
+    ending : str
+        The suffix to add at the end of the file name
+    """
     print('Saving theta...')
     np.save('weights/theta' + ending, neuron_group_e.theta)
 
 
 def random_connections(path = 'random2/'):
+    """Generate random weight matrices with the right size specified at the
+    start of the simulation
+
+    Parameters
+    ----------
+    path : str
+        The folder in which to save the matrices
+    """
     print('Randomizing matrices...')
     matrix_ei = np.zeros((n_e, 3))
     for i in range(n_e):
@@ -88,6 +129,9 @@ def random_connections(path = 'random2/'):
     np.save(path + 'XeAe', matrix_input)
 
 def normalize_weights():
+    """Normalize weights so that the sum of all weights going from input neurons
+    to a specific excitatory neuron is 78
+    """
     conn_matrix = synapses_input.w
     temp_conn = np.copy(conn_matrix).reshape((n_input, n_e))
     colSums = np.sum(temp_conn, axis = 0)
@@ -98,25 +142,36 @@ def normalize_weights():
 
 
 def get_2d_input_weights():
-    name = 'XeAe'
+    """Get input to excitatory neurons weight matrix in a format suitable
+    for plotting
+    """
     weight_matrix = np.zeros((n_input, n_e))
     n_e_sqrt = int(np.sqrt(n_e))
     n_in_sqrt = int(np.sqrt(n_input))
     num_values_col = n_e_sqrt*n_in_sqrt
     num_values_row = num_values_col
-    rearranged_weigths = np.zeros((num_values_col, num_values_row))
+    rearranged_weights = np.zeros((num_values_col, num_values_row))
     conn_matrix = synapses_input.w
     weight_matrix = np.copy(conn_matrix).reshape((n_input, n_e))
 
     for i in range(n_e_sqrt):
         for j in range(n_e_sqrt):
-            rearranged_weigths[i*n_in_sqrt : (i+1)*n_in_sqrt, j*n_in_sqrt : (j+1)*n_in_sqrt] = \
+            rearranged_weights[i*n_in_sqrt : (i+1)*n_in_sqrt, j*n_in_sqrt : (j+1)*n_in_sqrt] = \
                     weight_matrix[:, i + j*n_e_sqrt].reshape((n_in_sqrt, n_in_sqrt))
 
-    return rearranged_weigths
+    return rearranged_weights
 
 
 def plot_2d_input_weights():
+    """Plot input to excitatory neurons weight matrix
+
+    Returns
+    -------
+    im2
+        Matplotlib image
+    fig
+        Matplotlib figure
+    """
     name = 'XeAe'
     weights = get_2d_input_weights()
     fig = b2.figure(2, figsize = (18, 18))
@@ -129,6 +184,13 @@ def plot_2d_input_weights():
 
 
 def update_2d_input_weights(im, fig):
+    """Update the input to excitatory neurons weight matrix plot
+
+    Returns
+    -------
+    im
+        Matplotlib image
+    """
     weights = get_2d_input_weights()
     im.set_array(weights)
     fig.canvas.draw()
@@ -136,6 +198,20 @@ def update_2d_input_weights(im, fig):
 
 
 def get_current_performance(performance, current_example_num):
+    """Get the network performance over the last 'update_interval' images
+
+    Parameters
+    ----------
+    performance
+        Array storing the performances
+    current_example_num
+        Index of the current image the network is training on
+
+    Returns
+    -------
+    performance
+        Array storing the performances, now updated
+    """
     current_evaluation = int(current_example_num/update_interval)
     start_num = current_example_num - update_interval
     end_num = current_example_num
@@ -146,6 +222,17 @@ def get_current_performance(performance, current_example_num):
 
 
 def plot_performance():
+    """Plot the network performance
+
+    Returns
+    -------
+    im2
+        Matplotlib image
+    performance
+        Array storing 0s that will record future performances
+    fig
+        Matplotlib figure
+    """
     num_evaluations = int(nb_examples/update_interval) + 1
     time_steps = range(0, num_evaluations)
     performance = np.zeros(num_evaluations)
@@ -159,12 +246,48 @@ def plot_performance():
 
 
 def update_performance_plot(im, performance, current_example_num, fig):
+    """Update the network performance plot
+
+    Parameters
+    ----------
+    im
+        Matplotlib image
+    performance
+        Array storing the performances
+    current_example_num
+        Index of the current image the network is training on
+    fig
+        Matplotlib figure
+
+    Returns
+    -------
+    im
+        Matplotlib image
+    performance
+        Array storing the network performances, updated
+    """
     performance = get_current_performance(performance, current_example_num)
     im.set_ydata(performance)
     fig.canvas.draw()
     return im, performance
 
+
 def get_recognized_number_ranking(assignments, spike_rates):
+    """Get the numbers recognized by the network for a given spike rate
+
+    Parameters
+    ----------
+    assignments
+        Array storing neuron assignments
+    spike_rates
+        Array storing the spike rate to analyse
+
+    Returns
+    -------
+    array
+        Array storing the recognized numbers sorted by their probability of
+        being the actual number
+    """
     summed_rates = [0] * 10
     num_assignments = [0] * 10
     for i in range(10):
@@ -173,7 +296,24 @@ def get_recognized_number_ranking(assignments, spike_rates):
             summed_rates[i] = np.sum(spike_rates[assignments == i]) / num_assignments[i]
     return np.argsort(summed_rates)[::-1]
 
+
 def get_new_assignments(result_monitor, input_numbers):
+    """Get neuron assignments (i.e class) based on given spike rates
+    over given input numbers
+
+    Parameters
+    ----------
+    result_monitor
+        2D array storing, for each input number, the correspong spike rate
+    input_numbers
+        Array storing the input numbers the network has been fed with
+
+    Returns
+    -------
+    assignments
+        Array storing, for each excitatory neuron, the number it is more likely
+        to spike to
+    """
     assignments = np.zeros(n_e)
     input_nums = np.asarray(input_numbers)
     maximum_rate = [0] * n_e
