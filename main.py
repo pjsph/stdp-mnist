@@ -1,8 +1,12 @@
 import time
+
+from matplotlib import contextlib
 import mnist
 import brian2 as b2
 import brian2tools as b2tools
 import numpy as np
+from multiprocessing import Process, Queue
+from matplotlib.animation import FuncAnimation
 
 def visualize_connectivity(S):
     """Plot synapses stored in S
@@ -162,39 +166,21 @@ def get_2d_input_weights():
     return rearranged_weights
 
 
-def plot_2d_input_weights():
-    """Plot input to excitatory neurons weight matrix
-
-    Returns
-    -------
-    im2
-        Matplotlib image
-    fig
-        Matplotlib figure
-    """
+def animate_2d_input_weights(q, n_input, n_e, wmax):
     name = 'XeAe'
-    weights = get_2d_input_weights()
+    weights = np.zeros((n_input, n_e))
     fig = b2.figure(2, figsize = (18, 18))
-    im2 = b2.imshow(weights, interpolation = 'nearest', vmin = 0, vmax = wmax, cmap = 'hot_r')
-    b2.colorbar(im2)
+    im = b2.imshow(weights, interpolation = 'nearest', vmin = 0, vmax = wmax, cmap = 'hot_r')
+    b2.colorbar(im)
     b2.title('weights of connection ' + name)
-    fig.canvas.draw()
-    #b2.pause(1)
-    return im2, fig
 
+    def _animate(frame):
+        while not q.empty():
+            weights = q.get()
+            im.set_array(weights)
 
-def update_2d_input_weights(im, fig):
-    """Update the input to excitatory neurons weight matrix plot
-
-    Returns
-    -------
-    im
-        Matplotlib image
-    """
-    weights = get_2d_input_weights()
-    im.set_array(weights)
-    fig.canvas.draw()
-    return im
+    animation = FuncAnimation(fig, _animate, interval=500)
+    b2.show()
 
 
 def get_current_performance(performance, current_example_num):
@@ -221,30 +207,6 @@ def get_current_performance(performance, current_example_num):
     return performance
 
 
-def plot_performance():
-    """Plot the network performance
-
-    Returns
-    -------
-    im2
-        Matplotlib image
-    performance
-        Array storing 0s that will record future performances
-    fig
-        Matplotlib figure
-    """
-    num_evaluations = int(nb_examples/update_interval) + 1
-    time_steps = range(0, num_evaluations)
-    performance = np.zeros(num_evaluations)
-    fig = b2.figure(3, figsize = (5, 5))
-    ax = fig.add_subplot(111)
-    im2, = ax.plot(time_steps, performance)
-    b2.ylim(ymax = 100)
-    b2.title('Classification performance')
-    fig.canvas.draw()
-    return im2, performance, fig
-
-
 def update_performance_plot(im, performance, current_example_num, fig):
     """Update the network performance plot
 
@@ -266,10 +228,23 @@ def update_performance_plot(im, performance, current_example_num, fig):
     performance
         Array storing the network performances, updated
     """
-    performance = get_current_performance(performance, current_example_num)
-    im.set_ydata(performance)
-    fig.canvas.draw()
     return im, performance
+
+
+def animate_performance_plot(q, time_steps, performance):
+    fig = b2.figure(3, figsize = (5, 5))
+    ax = fig.add_subplot(111)
+    im, = ax.plot(time_steps, performance)
+    b2.ylim(ymax = 100)
+    b2.title('Classification performance')
+
+    def _animate(frame):
+        while not q.empty():
+            performance = q.get()
+            im.set_ydata(performance)
+
+    animation = FuncAnimation(fig, _animate, interval=500, cache_frame_data=False)
+    b2.show()
 
 
 def get_recognized_number_ranking(assignments, spike_rates):
@@ -328,254 +303,269 @@ def get_new_assignments(result_monitor, input_numbers):
     return assignments
 
 
-# -----------------------------
-# Load MNIST
-# -----------------------------
+if __name__ == "__main__":
 
-print('Loading MNIST data...')
+    # -----------------------------
+    # Load MNIST
+    # -----------------------------
 
-start = time.time()
-training = mnist.get_labeled_data([0, 1], True)
-end = time.time()
-print('Loaded training set in:', end - start, "s")
+    print('Loading MNIST data...')
 
-start = time.time()
-testing = mnist.get_labeled_data([0, 1], False)
-end = time.time()
-print('Loaded testing set in:', end - start, "s")
+    start = time.time()
+    training = mnist.get_labeled_data([0, 1], True)
+    end = time.time()
+    print('Loaded training set in:', end - start, "s")
 
-# ----------------------------
-# Parameters & 2nd Layer Equations
-# ----------------------------
+    start = time.time()
+    testing = mnist.get_labeled_data([0, 1], False)
+    end = time.time()
+    print('Loaded testing set in:', end - start, "s")
 
-test_mode = False
+    # ----------------------------
+    # Parameters & 2nd Layer Equations
+    # ----------------------------
 
-if test_mode:
-    weight_path = 'weights/'
-    nb_examples = 100 # 10000
-    use_testing_set = True
-    ee_STDP_on = False
-    update_interval = nb_examples
-else:
-    weight_path = 'random2/'
-    nb_examples = 60000
-    use_testing_set = False
-    ee_STDP_on = True
+    test_mode = False
 
-n_input = 784
-n_e = 100 # 400
-n_i = n_e
-single_example_time = 0.35 * b2.second
-resting_time = 0.15 * b2.second
-runtime = nb_examples * (single_example_time + resting_time)
-if nb_examples <= 10000:
-    update_interval = 10 # nb_examples
-    weight_update_interval = 20
-else:
-    update_interval = 10000
-    weight_update_interval = 100
-save_connections_interval = 1000
-
-random_connections() # to be sure matrices have the right size
-
-v_rest_e = -65. * b2.mV
-v_rest_i = -60. * b2.mV
-v_reset_e = -65. * b2.mV
-v_reset_i = -45. * b2.mV
-v_thresh_e = -52. * b2.mV
-v_thresh_i = -40. * b2.mV
-refrac_e = 5. * b2.ms
-refrac_i = 2. * b2.ms
-
-input_intensity = 2.
-start_input_intensity = input_intensity
-
-tc_pre_ee = 20 * b2.ms
-tc_post1_ee = 20 * b2.ms
-tc_post2_ee = 40 * b2.ms
-nu_ee_pre = 0.0001
-nu_ee_post = 0.01
-wmax = 1.0
-
-if test_mode:
-    scr_e = 'v = v_reset_e; timer = 0 * second'
-else:
-    tc_theta = 1e7 * b2.ms
-    theta_plus_e = 0.05 * b2.mV
-    scr_e = 'v = v_reset_e; theta += theta_plus_e; timer = 0 * second'
-offset = 20.0 * b2.mV
-
-neuron_eqs_e = '''
-        dv/dt = ((v_rest_e - v) + (I_synE + I_synI) / nS) / (100 * ms) : volt
-        I_synE = ge * nS * -v : amp
-        I_synI = gi * nS * (-100. * mV - v) : amp
-        dge/dt = -ge/(1.0 * ms) : 1
-        dgi/dt = -gi/(2.0 * ms) : 1
-        '''
-
-if test_mode:
-    neuron_eqs_e += '\n theta : volt'
-else:
-    neuron_eqs_e += '\n dtheta/dt = -theta/(tc_theta) : volt'
-neuron_eqs_e += '\n dtimer/dt = 100.0e-3 : second'
-
-neuron_eqs_i = '''
-        dv/dt = ((v_rest_i - v) + (I_synE + I_synI) / nS) / (10 * ms) : volt
-        I_synE = ge * nS * -v : amp
-        I_synI = gi * nS * (-85. * mV - v) : amp
-        dge/dt = -ge/(1.0 * ms) : 1
-        dgi/dt = -gi/(2.0 * ms) : 1
-        '''
-
-eqs_stdp_ee = '''
-        w : 1
-        post2before : 1
-        dpre/dt = -pre/(tc_pre_ee) : 1 (event-driven)
-        dpost1/dt = -post1/(tc_post1_ee) : 1 (event-driven)
-        dpost2/dt = -post2/(tc_post2_ee) : 1 (event-driven)
-        '''
-eqs_stdp_pre_ee = '''
-        ge += w 
-        pre = 1. 
-        w = clip(w - nu_ee_pre * post1, 0, wmax)
-        '''
-eqs_stdp_post_ee = '''
-        post2before = post2 
-        w = clip(w + nu_ee_post * pre * post2before, 0, wmax) 
-        post1 = 1. 
-        post2 = 1. 
-        '''
-
-#b2.ion()
-result_monitor = np.zeros((update_interval, n_e))
-
-print('Creating neuron groups...')
-
-neuron_group_e = b2.NeuronGroup(n_e, neuron_eqs_e, threshold='(v>(theta - offset + v_thresh_e)) and (timer>refrac_e)', reset=scr_e, refractory=refrac_e)
-neuron_group_i = b2.NeuronGroup(n_i, neuron_eqs_i, threshold='v > v_thresh_i', reset='v = v_reset_i', refractory=refrac_i)
-
-neuron_group_e.v = v_rest_e - 40. * b2.mV
-neuron_group_i.v = v_rest_i - 40. * b2.mV
-if test_mode:
-    neuron_group_e.theta = np.load(weight_path + 'theta.npy') * b2.volt
-else:
-    neuron_group_e.theta = np.ones((n_e)) * 20.0 * b2.mV
-
-print('Creating synapses...')
-
-weight_matrix_ei = get_matrix_from_file('random2/AeAi.npy')
-synapses_ei = b2.Synapses(neuron_group_e, neuron_group_i, 'w : 1', on_pre='ge += w')
-synapses_ei.connect()
-synapses_ei.w = weight_matrix_ei.flatten()
-
-weight_matrix_ie = get_matrix_from_file('random2/AiAe.npy')
-synapses_ie = b2.Synapses(neuron_group_i, neuron_group_e, 'w : 1', on_pre='gi += w')
-synapses_ie.connect()
-synapses_ie.w = weight_matrix_ie.flatten()
-
-# visualize_connectivity(synapses_ie) # use for visualisation
-
-rate_monitor_e = b2.PopulationRateMonitor(neuron_group_e) 
-rate_monitor_i = b2.PopulationRateMonitor(neuron_group_i)
-spike_counter = b2.SpikeMonitor(neuron_group_e, record=False)
-
-spike_monitor_e = b2.SpikeMonitor(neuron_group_e)
-spike_monitor_i = b2.SpikeMonitor(neuron_group_i)
-
-#b2.figure(1)
-##b2.ion()
-#b2.subplot(211)
-#b2tools.brian_plot(spike_monitor_e)
-#b2.subplot(212)
-#b2tools.brian_plot(spike_monitor_i)
-#b2.draw()
-#b2.pause(0.01)
-
-# ----------------------------
-# Input Layer Equations
-# ----------------------------
-
-print('Creating input layer neuron group and synapses...')
-
-input_group = b2.PoissonGroup(n_input, 0 * b2.Hz)
-rate_monitor_input = b2.PopulationRateMonitor(input_group)
-
-weight_matrix_input = get_matrix_from_file(weight_path + 'XeAe.npy')
-if ee_STDP_on:
-    synapses_input = b2.Synapses(input_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
-else:
-    synapses_input = b2.Synapses(input_group, neuron_group_e, 'w : 1', on_pre='ge += w')
-synapses_input.connect()
-synapses_input.w = weight_matrix_input.flatten()
-synapses_input.delay = 'rand()*10*ms'
-
-# ----------------------------
-# Simulation
-# ----------------------------
-
-previous_spike_count = np.zeros(n_e)
-assignments = np.zeros(n_e)
-input_numbers = [0] * nb_examples
-output_numbers = np.zeros((nb_examples, 10))
-
-if not test_mode:
-    input_weight_monitor, fig_weights = plot_2d_input_weights()
-
-performance_monitor, performance, fig_performance = plot_performance()
-
-input_group.rates = 0
-
-b2.run(0 * b2.ms)
-
-j = 0
-while j < int(nb_examples):
     if test_mode:
-        if use_testing_set:
-            rates = [col / 8. * input_intensity * b2.Hz for row in testing[0][j%10000] for col in row]
+        weight_path = 'weights/'
+        nb_examples = 100 # 10000
+        use_testing_set = True
+        ee_STDP_on = False
+        update_interval = nb_examples
+    else:
+        weight_path = 'random2/'
+        nb_examples = 100 # 60000
+        use_testing_set = False
+        ee_STDP_on = True
+
+    n_input = 784
+    n_e = 400 # 400
+    n_i = n_e
+    single_example_time = 0.35 * b2.second
+    resting_time = 0.15 * b2.second
+    runtime = nb_examples * (single_example_time + resting_time)
+    if nb_examples <= 10000:
+        update_interval = 10 # nb_examples
+        weight_update_interval = 10
+    else:
+        update_interval = 10000
+        weight_update_interval = 100
+    save_connections_interval = 1000
+
+    random_connections() # to be sure matrices have the right size
+
+    v_rest_e = -65. * b2.mV
+    v_rest_i = -60. * b2.mV
+    v_reset_e = -65. * b2.mV
+    v_reset_i = -45. * b2.mV
+    v_thresh_e = -52. * b2.mV
+    v_thresh_i = -40. * b2.mV
+    refrac_e = 5. * b2.ms
+    refrac_i = 2. * b2.ms
+
+    input_intensity = 2.
+    start_input_intensity = input_intensity
+
+    tc_pre_ee = 20 * b2.ms
+    tc_post1_ee = 20 * b2.ms
+    tc_post2_ee = 40 * b2.ms
+    nu_ee_pre = 0.0001
+    nu_ee_post = 0.01
+    wmax = 1.0
+
+    if test_mode:
+        scr_e = 'v = v_reset_e; timer = 0 * second'
+    else:
+        tc_theta = 1e7 * b2.ms
+        theta_plus_e = 0.05 * b2.mV
+        scr_e = 'v = v_reset_e; theta += theta_plus_e; timer = 0 * second'
+    offset = 20.0 * b2.mV
+
+    neuron_eqs_e = '''
+            dv/dt = ((v_rest_e - v) + (I_synE + I_synI) / nS) / (100 * ms) : volt
+            I_synE = ge * nS * -v : amp
+            I_synI = gi * nS * (-100. * mV - v) : amp
+            dge/dt = -ge/(1.0 * ms) : 1
+            dgi/dt = -gi/(2.0 * ms) : 1
+            '''
+
+    if test_mode:
+        neuron_eqs_e += '\n theta : volt'
+    else:
+        neuron_eqs_e += '\n dtheta/dt = -theta/(tc_theta) : volt'
+    neuron_eqs_e += '\n dtimer/dt = 100.0e-3 : second'
+
+    neuron_eqs_i = '''
+            dv/dt = ((v_rest_i - v) + (I_synE + I_synI) / nS) / (10 * ms) : volt
+            I_synE = ge * nS * -v : amp
+            I_synI = gi * nS * (-85. * mV - v) : amp
+            dge/dt = -ge/(1.0 * ms) : 1
+            dgi/dt = -gi/(2.0 * ms) : 1
+            '''
+
+    eqs_stdp_ee = '''
+            w : 1
+            post2before : 1
+            dpre/dt = -pre/(tc_pre_ee) : 1 (event-driven)
+            dpost1/dt = -post1/(tc_post1_ee) : 1 (event-driven)
+            dpost2/dt = -post2/(tc_post2_ee) : 1 (event-driven)
+            '''
+    eqs_stdp_pre_ee = '''
+            ge += w 
+            pre = 1. 
+            w = clip(w - nu_ee_pre * post1, 0, wmax)
+            '''
+    eqs_stdp_post_ee = '''
+            post2before = post2 
+            w = clip(w + nu_ee_post * pre * post2before, 0, wmax) 
+            post1 = 1. 
+            post2 = 1. 
+            '''
+
+    #b2.ion()
+    result_monitor = np.zeros((update_interval, n_e))
+
+    print('Creating neuron groups...')
+
+    neuron_group_e = b2.NeuronGroup(n_e, neuron_eqs_e, threshold='(v>(theta - offset + v_thresh_e)) and (timer>refrac_e)', reset=scr_e, refractory=refrac_e)
+    neuron_group_i = b2.NeuronGroup(n_i, neuron_eqs_i, threshold='v > v_thresh_i', reset='v = v_reset_i', refractory=refrac_i)
+
+    neuron_group_e.v = v_rest_e - 40. * b2.mV
+    neuron_group_i.v = v_rest_i - 40. * b2.mV
+    if test_mode:
+        neuron_group_e.theta = np.load(weight_path + 'theta.npy') * b2.volt
+    else:
+        neuron_group_e.theta = np.ones((n_e)) * 20.0 * b2.mV
+
+    print('Creating synapses...')
+
+    weight_matrix_ei = get_matrix_from_file('random2/AeAi.npy')
+    synapses_ei = b2.Synapses(neuron_group_e, neuron_group_i, 'w : 1', on_pre='ge += w')
+    synapses_ei.connect()
+    synapses_ei.w = weight_matrix_ei.flatten()
+
+    weight_matrix_ie = get_matrix_from_file('random2/AiAe.npy')
+    synapses_ie = b2.Synapses(neuron_group_i, neuron_group_e, 'w : 1', on_pre='gi += w')
+    synapses_ie.connect()
+    synapses_ie.w = weight_matrix_ie.flatten()
+
+    # visualize_connectivity(synapses_ie) # use for visualisation
+
+    rate_monitor_e = b2.PopulationRateMonitor(neuron_group_e) 
+    rate_monitor_i = b2.PopulationRateMonitor(neuron_group_i)
+    spike_counter = b2.SpikeMonitor(neuron_group_e, record=False)
+
+    spike_monitor_e = b2.SpikeMonitor(neuron_group_e)
+    spike_monitor_i = b2.SpikeMonitor(neuron_group_i)
+
+    #b2.figure(1)
+    ##b2.ion()
+    #b2.subplot(211)
+    #b2tools.brian_plot(spike_monitor_e)
+    #b2.subplot(212)
+    #b2tools.brian_plot(spike_monitor_i)
+    #b2.draw()
+    #b2.pause(0.01)
+
+    # ----------------------------
+    # Input Layer Equations
+    # ----------------------------
+
+    print('Creating input layer neuron group and synapses...')
+
+    input_group = b2.PoissonGroup(n_input, 0 * b2.Hz)
+    rate_monitor_input = b2.PopulationRateMonitor(input_group)
+
+    weight_matrix_input = get_matrix_from_file(weight_path + 'XeAe.npy')
+    if ee_STDP_on:
+        synapses_input = b2.Synapses(input_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
+    else:
+        synapses_input = b2.Synapses(input_group, neuron_group_e, 'w : 1', on_pre='ge += w')
+    synapses_input.connect()
+    synapses_input.w = weight_matrix_input.flatten()
+    synapses_input.delay = 'rand()*10*ms'
+
+    # ----------------------------
+    # Simulation
+    # ----------------------------
+
+    previous_spike_count = np.zeros(n_e)
+    assignments = np.zeros(n_e)
+    input_numbers = [0] * nb_examples
+    output_numbers = np.zeros((nb_examples, 10))
+
+    if not test_mode:
+        weight_data_queue = Queue()
+        weight_plot_process = Process(target=animate_2d_input_weights, args=(weight_data_queue, n_input, n_e, wmax))
+        weight_plot_process.start()
+
+    #performance_monitor, performance, fig_performance = plot_performance()
+    num_evaluations = int(nb_examples/update_interval) + 1
+    time_steps = range(0, num_evaluations)
+    performance = np.zeros(num_evaluations)
+    performance_data_queue = Queue()
+    performance_plot_process = Process(target=animate_performance_plot, args=(performance_data_queue, time_steps, performance))
+    performance_plot_process.start()
+
+    input_group.rates = 0
+
+    b2.run(0 * b2.ms)
+
+    j = 0
+    while j < int(nb_examples):
+        if test_mode:
+            if use_testing_set:
+                rates = [col / 8. * input_intensity * b2.Hz for row in testing[0][j%10000] for col in row]
+            else:
+                rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
         else:
+            normalize_weights()
             rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
-    else:
-        normalize_weights()
-        rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
 
-    input_group.rates = rates
+        input_group.rates = rates
 
-    b2.run(single_example_time, report='text')
+        b2.run(single_example_time, report='text')
 
-    if j % update_interval == 0 and j > 0:
-        assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
-    if j % weight_update_interval == 0 and not test_mode:
-        update_2d_input_weights(input_weight_monitor, fig_weights)
-    if j % save_connections_interval == 0 and j > 0 and not test_mode:
-        save_connections(str(j))
-        save_theta(str(j))
-
-    current_spike_count = np.asarray(spike_counter.count[:]) - previous_spike_count
-    previous_spike_count = np.copy(spike_counter.count[:])
-    print('spiked', sum(current_spike_count), 'times')
-    if sum(current_spike_count) < 5:
-        print('-- Increased intensity')
-        input_intensity += 1
-        input_group.rates = 0
-        b2.run(resting_time)
-    else:
-        print('-- OK')
-        result_monitor[j%update_interval,:] = current_spike_count
-        if test_mode and use_testing_set:
-            input_numbers[j] = testing[1][j%10000]
-        else:
-            input_numbers[j] = training[1][j%60000]
-
-        output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
-
-        print(j)
-        if j % 10 == 0 and j > 0:
-            print('Runs done:', j, 'of', nb_examples)
         if j % update_interval == 0 and j > 0:
-            unused, performance = update_performance_plot(performance_monitor, performance, j, fig_performance)
-            print('Classification performance', performance[:(j//update_interval) + 1])
+            assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
+        if j % weight_update_interval == 0 and not test_mode:
+            weight_data_queue.put(get_2d_input_weights())
+        if j % save_connections_interval == 0 and j > 0 and not test_mode:
+            save_connections(str(j))
+            save_theta(str(j))
 
-        input_group.rates = 0
-        b2.run(resting_time)
-        input_intensity = start_input_intensity
-        j += 1
+        current_spike_count = np.asarray(spike_counter.count[:]) - previous_spike_count
+        previous_spike_count = np.copy(spike_counter.count[:])
+        print('spiked', sum(current_spike_count), 'times')
+        if sum(current_spike_count) < 5:
+            print('-- Increased intensity')
+            input_intensity += 1
+            input_group.rates = 0
+            b2.run(resting_time)
+        else:
+            print('-- OK')
+            result_monitor[j%update_interval,:] = current_spike_count
+            if test_mode and use_testing_set:
+                input_numbers[j] = testing[1][j%10000]
+            else:
+                input_numbers[j] = training[1][j%60000]
+
+            output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
+
+            print(j)
+            if j % 10 == 0 and j > 0:
+                print('Runs done:', j, 'of', nb_examples)
+            if j % update_interval == 0 and j > 0:
+                performance = get_current_performance(performance, j)
+                performance_data_queue.put(performance)
+                print('Classification performance', performance[:(j//update_interval) + 1])
+
+            input_group.rates = 0
+            b2.run(resting_time)
+            input_intensity = start_input_intensity
+            j += 1
+
+    if not test_mode:
+        weight_plot_process.join()
+    performance_plot_process.join()
