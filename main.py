@@ -417,9 +417,9 @@ if spike_counter:
     b2.figure(fig_num)
     fig_num += 1
 
-    for i in enumerate(spike_counter):
+    for i in len(spike_counter):
         b2.subplot(len(spike_counter), 1, i)
-        b2.plot(spike_counter['Ae'].count[:])
+        b2.plot(spike_counter.i)
         b2.title('Spike count of population ')
 
 plot_2d_input_weights()
@@ -448,7 +448,7 @@ if spike_monitor_e:
     b2.figure(fig_num)
     fig_num += 1
 
-    for i in enumerate(spike_monitor_e):
+    for i in len(spike_monitor_e):
         b2.subplot(len(spike_monitor_e), 1, i)
         b2.raster_plot(spike_monitor_e)
         b2.title('Spikes of excitatory population')
