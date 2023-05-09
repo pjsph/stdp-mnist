@@ -308,9 +308,12 @@ synapses_ie.w = weight_matrix_ie.flatten()
 # visualize_connectivity(synapses_ie) # use for visualisation
 
 rate_monitor_e = b2.PopulationRateMonitor(neuron_group_e) 
+print(rate_monitor_e)
 rate_monitor_i = b2.PopulationRateMonitor(neuron_group_i)
 spike_counter = b2.SpikeMonitor(neuron_group_e, record=False)
 
+# for i in range (nb_examples):
+# rate_monitors = rate_monitor_e 
 spike_monitor_e = b2.SpikeMonitor(neuron_group_e)
 spike_monitor_i = b2.SpikeMonitor(neuron_group_i)
 
