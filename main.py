@@ -204,8 +204,8 @@ print('Loaded training set in:', end - start, "s")
 # ----------------------------
 # Parameters & 2nd Layer Equations
 # ----------------------------
-
-nb_examples = 10000
+rate_monitors={}
+nb_examples = 200
 
 n_input = 784
 n_e = 100 # 400
@@ -397,3 +397,65 @@ while j < int(nb_examples):
         b2.run(resting_time)
         input_intensity = start_input_intensity
         j += 1
+
+# -------------------
+# Results saving
+# -------------------
+data_path = './'
+print ('save results')
+np.save(data_path + 'activity/resultPopVecs' + str(nb_examples), result_monitor)
+np.save(data_path + 'activity/inputNumbers' + str(nb_examples), input_numbers)
+# -------------------
+# Results plotting
+# -------------------
+fig_num=0
+
+if spike_counter:
+    b2.figure(fig_num)
+    fig_num += 1
+
+    for i in enumerate(spike_counter):
+        b2.subplot(len(spike_counter), 1, i)
+        b2.plot(spike_counter['Ae'].count[:])
+        b2.title('Spike count of population ')
+
+plot_2d_input_weights()
+b2.ioff()
+b2.show()
+
+if rate_monitor_e:
+    b2.figure(fig_num)
+    fig_num += 1
+
+    for i in enumerate(rate_monitor_e):
+        b2.subplot(len(rate_monitor_e), 1, i)
+        b2.plot(rate_monitor_e.times/b2.second, rate_monitor_e.rate, '.')
+        b2.title('Rates of population excitatory neurons')
+
+if rate_monitor_i:
+    b2.figure(fig_num)
+    fig_num += 1
+
+    for i in enumerate(rate_monitor_i):
+        b2.subplot(len(rate_monitor_i), 1, i)
+        b2.plot(rate_monitor_i.times/b2.second, rate_monitor_i.rate, '.')
+        b2.title('Rates of population inhibitory neurons')
+    
+if spike_monitor_e:
+    b2.figure(fig_num)
+    fig_num += 1
+
+    for i in enumerate(spike_monitor_e):
+        b2.subplot(len(spike_monitor_e), 1, i)
+        b2.raster_plot(spike_monitor_e)
+        b2.title('Spikes of excitatory population')
+
+if spike_monitor_i:
+    b2.figure(fig_num)
+    fig_num += 1
+
+    for i in enumerate(spike_monitor_i):
+        b2.subplot(len(spike_monitor_i), 1, i)
+        b2.raster_plot(spike_monitor_i)
+        b2.title('Spikes of inhibitory population')
+    
