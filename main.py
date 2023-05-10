@@ -88,7 +88,7 @@ def save_connections(ending = ''):
     conn_matrix = np.copy(synapses_input.w).reshape((n_input, n_e)) # Copy the weight matrix "synapses_input.w" using the "np.copy()" function. The weight matrix => 2D array with (n_input, n_e) dimensions; n_input - number of input neurons; n_e - number of excitatory neurons.
     matrix_input = [(i, j, conn_matrix[i,j]) for i in range(conn_matrix.shape[0]) for j in range(conn_matrix.shape[1])] # "matrix_input" is a list which stores the matrix weight connections as tuples
 
-    np.save('weights/XeAe' + ending, matrix_input) #the list from above is saved in a file using "np.save" function with the extension ".npy"
+    np.save('weights/XeAe' + ending, matrix_input) # the list from above is saved in a file using "np.save" function with the extension ".npy"
     
 
 def save_theta(ending = ''):
@@ -179,7 +179,7 @@ def get_2d_input_weights():
 
 def plot_2d_input_weights():
     """Plot input to excitatory neurons weight matrix
-
+        
     Returns
     -------
     im2
@@ -200,11 +200,16 @@ def plot_2d_input_weights():
 
 def update_2d_input_weights(im, fig):
     """Update the input to excitatory neurons weight matrix plot
+    Parameters
+        im  
+            Matplotlib image object 
+        fig 
+            Matplotlib figure object
 
     Returns
     -------
-    im
-        Matplotlib image
+    im 
+        Matplotlib image - It returns the updated image (im) as the result of the function
     """
     weights = get_2d_input_weights()
     im.set_array(weights)
