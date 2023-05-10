@@ -46,7 +46,7 @@ def get_matrix_from_file(filename):
     value_arr
         A 2D array representing the weight matrix
     """
-    offset = 4
+    offset = 4 # indicates the number of characters to skip from the end of the filename used in determining the source and target dimensions of the weight matrix.
     if filename[-4-offset] == 'X':
         n_src = n_input
     else:
@@ -54,23 +54,28 @@ def get_matrix_from_file(filename):
             n_src = n_e
         else:
             n_src = n_i
+    #This part is used to know the number of source neurons. If the character [-4-offset] is 'X'=> the weight matrix corresponds to the connections from input neurons. 
 
     if filename[-1-offset] == 'e':
         n_tgt = n_e
     else:
         n_tgt = n_i
+    #This part is used to know the number of target neurons. If the character [-1-offset] is 'e'=> the weight matrix corresponds to the connections which target the exhibitory neurons. 
 
     readout = np.load(filename)
     print(readout.shape, filename)
     # print(np.amax(readout[:,2]), np.amin(readout[:,2]))
-
+    # This part loads the data from the filename using the "np.load" function
+    # data is stored in "readout"
+    
     value_arr = np.zeros((n_src, n_tgt))
     if not readout.shape == (0,):
         value_arr[np.int32(readout[:,0]), np.int32(readout[:,1])] = readout[:,2]
     
     return value_arr
-
-
+    # "value_arr" is a 2D array which is initialized with 0; the initial weight matrix
+    # if the shape from "readout" data is not (0,), the values from "readout" will be assigned to the value_arr specific positions
+    
 def save_connections(ending = ''):
     """Save weight matrices
 
@@ -80,10 +85,10 @@ def save_connections(ending = ''):
         The suffix to add at the end of the file name
     """
     print('Saving connections...')
-    conn_matrix = np.copy(synapses_input.w).reshape((n_input, n_e))
-    matrix_input = [(i, j, conn_matrix[i,j]) for i in range(conn_matrix.shape[0]) for j in range(conn_matrix.shape[1])]
+    conn_matrix = np.copy(synapses_input.w).reshape((n_input, n_e)) # Copy the weight matrix "synapses_input.w" using the "np.copy()" function. The weight matrix => 2D array with (n_input, n_e) dimensions; n_input - number of input neurons; n_e - number of excitatory neurons.
+    matrix_input = [(i, j, conn_matrix[i,j]) for i in range(conn_matrix.shape[0]) for j in range(conn_matrix.shape[1])] # "matrix_input" is a list which stores the matrix weight connections as tuples
 
-    np.save('weights/XeAe' + ending, matrix_input)
+    np.save('weights/XeAe' + ending, matrix_input) #the list from above is saved in a file using "np.save" function with the extension ".npy"
     
 
 def save_theta(ending = ''):
@@ -108,37 +113,47 @@ def random_connections(path = 'random2/'):
         The folder in which to save the matrices
     """
     print('Randomizing matrices...')
+    
+    # matrix_ei -> connections from exhibitory neurons to inhibitory ones 
     matrix_ei = np.zeros((n_e, 3))
     for i in range(n_e):
         matrix_ei[i,:] = [i, i, 10.4]
+    # Each row represents a connection from an excitatory neuron (i) to an inhibitory neuron (i), weight = 10.4
 
-    matrix_ie = np.zeros((np.power(n_e, 2), 3))
+    # matrix_ie -> connections from inhibitory neurons to exhibitory ones
+    matrix_ie = np.zeros((np.power(n_e, 2), 3)) # n_e - number of excitatiory neurons
+    # the matrix is initialized with "n_e^2" and 3
     for k in range(np.power(n_e, 2)):
         i = k // n_e
         j = k % n_e
         matrix_ie[k] = [i, j, 0 if i == j else 17]
-
-    matrix_input = np.zeros((n_input * n_e, 3))
+    # Each row represents a connection from an inhibitory neuron (i) to an excitatory neuron (j), weight=0 if i==j -> these are intrainhibitory connections else weight=17
+     
+     
+    matrix_input = np.zeros((n_input * n_e, 3)) # n_e - number of excitatiory neurons
+    # the matrix is initialized with "n_input * n_e" and 3
     for k in range(n_input * n_e):
         i = k % n_input
         j = k // n_input
         matrix_input[k] = [i, j, np.random.random() * 0.3 + 0.003]
+    # Each row represents a connection from an input neuron (i) to an excitatory neuron (j), the weight is generated randomly 
 
     np.save(path + 'AeAi', matrix_ei)
     np.save(path + 'AiAe', matrix_ie)
     np.save(path + 'XeAe', matrix_input)
+    # Each matrix is saved with different intuitive names
 
 def normalize_weights():
     """Normalize weights so that the sum of all weights going from input neurons
     to a specific excitatory neuron is 78
     """
-    conn_matrix = synapses_input.w
-    temp_conn = np.copy(conn_matrix).reshape((n_input, n_e))
+    conn_matrix = synapses_input.w # conn_matrix is the weight matrix between input neurons and excitatory neurons 
+    temp_conn = np.copy(conn_matrix).reshape((n_input, n_e)) # "np.copy" copies the conn_matrix and is transformed into a 2D matrix with "reshape"
     colSums = np.sum(temp_conn, axis = 0)
-    colFactors = 78./colSums
+    colFactors = 78./colSums # we divide each column sum with 78 (the normalization value) and we obtain a factor => each factor is stored in "colFactors"
     for j in range(n_e):
-        temp_conn[:,j] *= colFactors[j]
-    synapses_input.w = temp_conn.flatten()
+        temp_conn[:,j] *= colFactors[j] # we approximate each weight column to 78
+    synapses_input.w = temp_conn.flatten() # updates the weights of the connections between input neurons and excitatory neurons with the normalized values
 
 
 def get_2d_input_weights():
