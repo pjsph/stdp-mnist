@@ -168,7 +168,9 @@ def get_2d_input_weights():
 
 def animate_2d_input_weights(q, n_input, n_e, wmax):
     name = 'XeAe'
-    weights = np.zeros((n_input, n_e))
+    n_e_sqrt = int(np.sqrt(n_e))
+    n_in_sqrt = int(np.sqrt(n_input))
+    weights = np.zeros((n_e_sqrt*n_in_sqrt, n_e_sqrt*n_in_sqrt))
     fig = b2.figure(2, figsize = (18, 18))
     im = b2.imshow(weights, interpolation = 'nearest', vmin = 0, vmax = wmax, cmap = 'hot_r')
     b2.colorbar(im)
