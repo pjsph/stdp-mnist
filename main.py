@@ -1,12 +1,17 @@
 import time
-
-from brian2 import rand, synapses
 import mnist
 import brian2 as b2
 import brian2tools as b2tools
 import numpy as np
 
 def visualize_connectivity(S):
+    """Plot synapses stored in S
+
+    Parameters
+    ----------
+    S : b2.Synapses
+        Synapses object to plot
+    """
     Ns = len(S.source)
     Nt = len(S.target)
     b2.figure(figsize=(10, 4))
@@ -29,6 +34,18 @@ def visualize_connectivity(S):
 
 
 def get_matrix_from_file(filename):
+    """Load a weight matrix from hard disk
+
+    Parameters
+    ----------
+    filename : str
+        The file path
+
+    Returns
+    -------
+    value_arr
+        A 2D array representing the weight matrix
+    """
     offset = 4
     if filename[-4-offset] == 'X':
         n_src = n_input
@@ -55,6 +72,13 @@ def get_matrix_from_file(filename):
 
 
 def save_connections(ending = ''):
+    """Save weight matrices
+
+    Parameters
+    ----------
+    ending : str
+        The suffix to add at the end of the file name
+    """
     print('Saving connections...')
     conn_matrix = np.copy(synapses_input.w).reshape((n_input, n_e))
     matrix_input = [(i, j, conn_matrix[i,j]) for i in range(conn_matrix.shape[0]) for j in range(conn_matrix.shape[1])]
@@ -63,11 +87,26 @@ def save_connections(ending = ''):
     
 
 def save_theta(ending = ''):
+    """Save theta value
+
+    Parameters
+    ----------
+    ending : str
+        The suffix to add at the end of the file name
+    """
     print('Saving theta...')
     np.save('weights/theta' + ending, neuron_group_e.theta)
 
 
 def random_connections(path = 'random2/'):
+    """Generate random weight matrices with the right size specified at the
+    start of the simulation
+
+    Parameters
+    ----------
+    path : str
+        The folder in which to save the matrices
+    """
     print('Randomizing matrices...')
     matrix_ei = np.zeros((n_e, 3))
     for i in range(n_e):
@@ -90,6 +129,9 @@ def random_connections(path = 'random2/'):
     np.save(path + 'XeAe', matrix_input)
 
 def normalize_weights():
+    """Normalize weights so that the sum of all weights going from input neurons
+    to a specific excitatory neuron is 78
+    """
     conn_matrix = synapses_input.w
     temp_conn = np.copy(conn_matrix).reshape((n_input, n_e))
     colSums = np.sum(temp_conn, axis = 0)
@@ -100,25 +142,36 @@ def normalize_weights():
 
 
 def get_2d_input_weights():
-    name = 'XeAe'
+    """Get input to excitatory neurons weight matrix in a format suitable
+    for plotting
+    """
     weight_matrix = np.zeros((n_input, n_e))
     n_e_sqrt = int(np.sqrt(n_e))
     n_in_sqrt = int(np.sqrt(n_input))
     num_values_col = n_e_sqrt*n_in_sqrt
     num_values_row = num_values_col
-    rearranged_weigths = np.zeros((num_values_col, num_values_row))
+    rearranged_weights = np.zeros((num_values_col, num_values_row))
     conn_matrix = synapses_input.w
     weight_matrix = np.copy(conn_matrix).reshape((n_input, n_e))
 
     for i in range(n_e_sqrt):
         for j in range(n_e_sqrt):
-            rearranged_weigths[i*n_in_sqrt : (i+1)*n_in_sqrt, j*n_in_sqrt : (j+1)*n_in_sqrt] = \
+            rearranged_weights[i*n_in_sqrt : (i+1)*n_in_sqrt, j*n_in_sqrt : (j+1)*n_in_sqrt] = \
                     weight_matrix[:, i + j*n_e_sqrt].reshape((n_in_sqrt, n_in_sqrt))
 
-    return rearranged_weigths
+    return rearranged_weights
 
 
 def plot_2d_input_weights():
+    """Plot input to excitatory neurons weight matrix
+
+    Returns
+    -------
+    im2
+        Matplotlib image
+    fig
+        Matplotlib figure
+    """
     name = 'XeAe'
     weights = get_2d_input_weights()
     fig = b2.figure(2, figsize = (18, 18))
@@ -131,6 +184,13 @@ def plot_2d_input_weights():
 
 
 def update_2d_input_weights(im, fig):
+    """Update the input to excitatory neurons weight matrix plot
+
+    Returns
+    -------
+    im
+        Matplotlib image
+    """
     weights = get_2d_input_weights()
     im.set_array(weights)
     fig.canvas.draw()
@@ -138,6 +198,20 @@ def update_2d_input_weights(im, fig):
 
 
 def get_current_performance(performance, current_example_num):
+    """Get the network performance over the last 'update_interval' images
+
+    Parameters
+    ----------
+    performance
+        Array storing the performances
+    current_example_num
+        Index of the current image the network is training on
+
+    Returns
+    -------
+    performance
+        Array storing the performances, now updated
+    """
     current_evaluation = int(current_example_num/update_interval)
     start_num = current_example_num - update_interval
     end_num = current_example_num
@@ -148,7 +222,18 @@ def get_current_performance(performance, current_example_num):
 
 
 def plot_performance():
-    num_evaluations = int(nb_examples/update_interval)
+    """Plot the network performance
+
+    Returns
+    -------
+    im2
+        Matplotlib image
+    performance
+        Array storing 0s that will record future performances
+    fig
+        Matplotlib figure
+    """
+    num_evaluations = int(nb_examples/update_interval) + 1
     time_steps = range(0, num_evaluations)
     performance = np.zeros(num_evaluations)
     fig = b2.figure(3, figsize = (5, 5))
@@ -161,21 +246,74 @@ def plot_performance():
 
 
 def update_performance_plot(im, performance, current_example_num, fig):
+    """Update the network performance plot
+
+    Parameters
+    ----------
+    im
+        Matplotlib image
+    performance
+        Array storing the performances
+    current_example_num
+        Index of the current image the network is training on
+    fig
+        Matplotlib figure
+
+    Returns
+    -------
+    im
+        Matplotlib image
+    performance
+        Array storing the network performances, updated
+    """
     performance = get_current_performance(performance, current_example_num)
     im.set_ydata(performance)
     fig.canvas.draw()
     return im, performance
 
+
 def get_recognized_number_ranking(assignments, spike_rates):
+    """Get the numbers recognized by the network for a given spike rate
+
+    Parameters
+    ----------
+    assignments
+        Array storing neuron assignments
+    spike_rates
+        Array storing the spike rate to analyse
+
+    Returns
+    -------
+    array
+        Array storing the recognized numbers sorted by their probability of
+        being the actual number
+    """
     summed_rates = [0] * 10
     num_assignments = [0] * 10
     for i in range(10):
-        num_assignments[i] = len(np.where(assignments == 1)[0])
+        num_assignments[i] = len(np.where(assignments == i)[0])
         if num_assignments[i] > 0:
             summed_rates[i] = np.sum(spike_rates[assignments == i]) / num_assignments[i]
     return np.argsort(summed_rates)[::-1]
 
+
 def get_new_assignments(result_monitor, input_numbers):
+    """Get neuron assignments (i.e class) based on given spike rates
+    over given input numbers
+
+    Parameters
+    ----------
+    result_monitor
+        2D array storing, for each input number, the correspong spike rate
+    input_numbers
+        Array storing the input numbers the network has been fed with
+
+    Returns
+    -------
+    assignments
+        Array storing, for each excitatory neuron, the number it is more likely
+        to spike to
+    """
     assignments = np.zeros(n_e)
     input_nums = np.asarray(input_numbers)
     maximum_rate = [0] * n_e
@@ -190,7 +328,7 @@ def get_new_assignments(result_monitor, input_numbers):
     return assignments
 
 
-# ------------------------------
+# -----------------------------
 # Load MNIST
 # -----------------------------
 
@@ -201,11 +339,28 @@ training = mnist.get_labeled_data([0, 1], True)
 end = time.time()
 print('Loaded training set in:', end - start, "s")
 
+start = time.time()
+testing = mnist.get_labeled_data([0, 1], False)
+end = time.time()
+print('Loaded testing set in:', end - start, "s")
+
 # ----------------------------
 # Parameters & 2nd Layer Equations
 # ----------------------------
-rate_monitors={}
-nb_examples = 200
+
+test_mode = False
+
+if test_mode:
+    weight_path = 'weights/'
+    nb_examples = 100 # 10000
+    use_testing_set = True
+    ee_STDP_on = False
+    update_interval = nb_examples
+else:
+    weight_path = 'random2/'
+    nb_examples = 6000
+    use_testing_set = False
+    ee_STDP_on = True
 
 n_input = 784
 n_e = 100 # 400
@@ -213,9 +368,13 @@ n_i = n_e
 single_example_time = 0.35 * b2.second
 resting_time = 0.15 * b2.second
 runtime = nb_examples * (single_example_time + resting_time)
-update_interval = 100 # nb_examples
-weight_update_interval = 50
-save_connections_interval = 100
+if nb_examples <= 10000:
+    update_interval = 10 # nb_examples
+    weight_update_interval = 20
+else:
+    update_interval = 10000
+    weight_update_interval = 100
+save_connections_interval = 1000
 
 random_connections() # to be sure matrices have the right size
 
@@ -238,9 +397,12 @@ nu_ee_pre = 0.0001
 nu_ee_post = 0.01
 wmax = 1.0
 
-tc_theta = 1e7 * b2.ms
-theta_plus_e = 0.05 * b2.mV
-scr_e = 'v = v_reset_e; theta += theta_plus_e; timer = 0 * second'
+if test_mode:
+    scr_e = 'v = v_reset_e; timer = 0 * second'
+else:
+    tc_theta = 1e7 * b2.ms
+    theta_plus_e = 0.05 * b2.mV
+    scr_e = 'v = v_reset_e; theta += theta_plus_e; timer = 0 * second'
 offset = 20.0 * b2.mV
 
 neuron_eqs_e = '''
@@ -251,7 +413,10 @@ neuron_eqs_e = '''
         dgi/dt = -gi/(2.0 * ms) : 1
         '''
 
-neuron_eqs_e += '\n dtheta/dt = -theta/(tc_theta) : volt'
+if test_mode:
+    neuron_eqs_e += '\n theta : volt'
+else:
+    neuron_eqs_e += '\n dtheta/dt = -theta/(tc_theta) : volt'
 neuron_eqs_e += '\n dtimer/dt = 100.0e-3 : second'
 
 neuron_eqs_i = '''
@@ -288,10 +453,12 @@ print('Creating neuron groups...')
 
 neuron_group_e = b2.NeuronGroup(n_e, neuron_eqs_e, threshold='(v>(theta - offset + v_thresh_e)) and (timer>refrac_e)', reset=scr_e, refractory=refrac_e)
 neuron_group_i = b2.NeuronGroup(n_i, neuron_eqs_i, threshold='v > v_thresh_i', reset='v = v_reset_i', refractory=refrac_i)
-
 neuron_group_e.v = v_rest_e - 40. * b2.mV
 neuron_group_i.v = v_rest_i - 40. * b2.mV
-neuron_group_e.theta = np.ones((n_e)) * 20.0 * b2.mV
+if test_mode:
+    neuron_group_e.theta = np.load(weight_path + 'theta.npy') * b2.volt
+else:
+    neuron_group_e.theta = np.ones((n_e)) * 20.0 * b2.mV
 
 print('Creating synapses...')
 
@@ -300,20 +467,20 @@ synapses_ei = b2.Synapses(neuron_group_e, neuron_group_i, 'w : 1', on_pre='ge +=
 synapses_ei.connect()
 synapses_ei.w = weight_matrix_ei.flatten()
 
+weights_ei = synapses_ei.w
+
 weight_matrix_ie = get_matrix_from_file('random2/AiAe.npy')
 synapses_ie = b2.Synapses(neuron_group_i, neuron_group_e, 'w : 1', on_pre='gi += w')
 synapses_ie.connect()
 synapses_ie.w = weight_matrix_ie.flatten()
 
+weights_ie = synapses_ie.w
+
 # visualize_connectivity(synapses_ie) # use for visualisation
 
 rate_monitor_e = b2.PopulationRateMonitor(neuron_group_e) 
-print(rate_monitor_e)
 rate_monitor_i = b2.PopulationRateMonitor(neuron_group_i)
 spike_counter = b2.SpikeMonitor(neuron_group_e, record=False)
-
-# for i in range (nb_examples):
-# rate_monitors = rate_monitor_e 
 spike_monitor_e = b2.SpikeMonitor(neuron_group_e)
 spike_monitor_i = b2.SpikeMonitor(neuron_group_i)
 
@@ -335,8 +502,11 @@ print('Creating input layer neuron group and synapses...')
 input_group = b2.PoissonGroup(n_input, 0 * b2.Hz)
 rate_monitor_input = b2.PopulationRateMonitor(input_group)
 
-weight_matrix_input = get_matrix_from_file('random2/XeAe.npy')
-synapses_input = b2.Synapses(input_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
+weight_matrix_input = get_matrix_from_file(weight_path + 'XeAe.npy')
+if ee_STDP_on:
+    synapses_input = b2.Synapses(input_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
+else:
+    synapses_input = b2.Synapses(input_group, neuron_group_e, 'w : 1', on_pre='ge += w')
 synapses_input.connect()
 synapses_input.w = weight_matrix_input.flatten()
 synapses_input.delay = 'rand()*10*ms'
@@ -350,7 +520,8 @@ assignments = np.zeros(n_e)
 input_numbers = [0] * nb_examples
 output_numbers = np.zeros((nb_examples, 10))
 
-input_weight_monitor, fig_weights = plot_2d_input_weights()
+if not test_mode:
+    input_weight_monitor, fig_weights = plot_2d_input_weights()
 
 performance_monitor, performance, fig_performance = plot_performance()
 
@@ -360,18 +531,24 @@ b2.run(0 * b2.ms)
 
 j = 0
 while j < int(nb_examples):
-    normalize_weights()
+    if test_mode:
+        if use_testing_set:
+            rates = [col / 8. * input_intensity * b2.Hz for row in testing[0][j%10000] for col in row]
+        else:
+            rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
+    else:
+        normalize_weights()
+        rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
 
-    rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%60000] for col in row]
     input_group.rates = rates
 
     b2.run(single_example_time, report='text')
 
     if j % update_interval == 0 and j > 0:
         assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
-    if j % weight_update_interval == 0:
+    if j % weight_update_interval == 0 and not test_mode:
         update_2d_input_weights(input_weight_monitor, fig_weights)
-    if j % save_connections_interval == 0 and j > 0:
+    if j % save_connections_interval == 0 and j > 0 and not test_mode:
         save_connections(str(j))
         save_theta(str(j))
 
@@ -386,10 +563,14 @@ while j < int(nb_examples):
     else:
         print('-- OK')
         result_monitor[j%update_interval,:] = current_spike_count
-        input_numbers[j] = training[1][j%60000]
+        if test_mode and use_testing_set:
+            input_numbers[j] = testing[1][j%10000]
+        else:
+            input_numbers[j] = training[1][j%60000]
 
         output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
 
+        print(j)
         if j % 10 == 0 and j > 0:
             print('Runs done:', j, 'of', nb_examples)
         if j % update_interval == 0 and j > 0:
@@ -400,7 +581,6 @@ while j < int(nb_examples):
         b2.run(resting_time)
         input_intensity = start_input_intensity
         j += 1
-
 # -------------------
 # Results saving
 # -------------------
@@ -408,57 +588,53 @@ data_path = './'
 print ('save results')
 np.save(data_path + 'activity/resultPopVecs' + str(nb_examples), result_monitor)
 np.save(data_path + 'activity/inputNumbers' + str(nb_examples), input_numbers)
-# -------------------
-# Results plotting
-# -------------------
-fig_num=0
 
-if spike_counter:
-    b2.figure(fig_num)
-    fig_num += 1
+#-------------------
+#Results plotting
+#-------------------
 
-    for i in len(spike_counter):
-        b2.subplot(len(spike_counter), 1, i)
-        b2.plot(spike_counter.i)
-        b2.title('Spike count of population ')
+# weights_mon = b2.StateMonitor(synapses_ei,'w',record = [100])
+
+# b2.figure()
+# b2.plot(weights_mon.t[:]/b2.second, weights_mon.w[0])
+
+#Doesn't work yet, but allows to visualize the evolution of the weight of a synapse during the training session
+
+weights = synapses_ei.w
+b2.figure()
+b2.plot(synapses_ei.t/b2.second,weights[0])
+
+#Allows to visualize the number of spikes of a group of neuron (e or i) as a function of time
+
+if spike_monitor_e:
+    b2.figure()
+    for i in range (len(spike_monitor_e)):
+        b2.plot(spike_monitor_e.t[:]/b2.second, spike_monitor_e.i[:])
+        b2.title('Spikes of excitatory population')
+
+if spike_monitor_i:
+    b2.figure()
+    for i in range (len(spike_monitor_i)):
+        b2.plot(spike_monitor_i.t[:]/b2.second, spike_monitor_i.i[:])
+        b2.title('Spikes of inhibitory population')
+        
+#Allows to visualize the rate of the neurons in each population (e and i)
+
+if rate_monitor_e:
+    b2.figure()
+    b2.plot(rate_monitor_e.t/b2.second, rate_monitor_e.rate, '.')
+    b2.title('Rates of population excitatory neurons')
+
+if rate_monitor_i:
+    b2.figure()
+    b2.plot(rate_monitor_i.t/b2.second, rate_monitor_i.rate, '.')
+    b2.title('Rates of population inhibitory neurons')
+    
+
+#Allows to view the connections between all the synapses (excitator-inhibitor or inhibitor-excitator) and the disposition of the network
+visualize_connectivity(synapses_ei)
+visualize_connectivity(synapses_ie)
 
 plot_2d_input_weights()
 b2.ioff()
 b2.show()
-
-if rate_monitor_e:
-    b2.figure(fig_num)
-    fig_num += 1
-
-    for i in enumerate(rate_monitor_e):
-        b2.subplot(len(rate_monitor_e), 1, i)
-        b2.plot(rate_monitor_e.times/b2.second, rate_monitor_e.rate, '.')
-        b2.title('Rates of population excitatory neurons')
-
-if rate_monitor_i:
-    b2.figure(fig_num)
-    fig_num += 1
-
-    for i in enumerate(rate_monitor_i):
-        b2.subplot(len(rate_monitor_i), 1, i)
-        b2.plot(rate_monitor_i.times/b2.second, rate_monitor_i.rate, '.')
-        b2.title('Rates of population inhibitory neurons')
-    
-if spike_monitor_e:
-    b2.figure(fig_num)
-    fig_num += 1
-
-    for i in len(spike_monitor_e):
-        b2.subplot(len(spike_monitor_e), 1, i)
-        b2.raster_plot(spike_monitor_e)
-        b2.title('Spikes of excitatory population')
-
-if spike_monitor_i:
-    b2.figure(fig_num)
-    fig_num += 1
-
-    for i in enumerate(spike_monitor_i):
-        b2.subplot(len(spike_monitor_i), 1, i)
-        b2.raster_plot(spike_monitor_i)
-        b2.title('Spikes of inhibitory population')
-    
