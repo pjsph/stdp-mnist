@@ -306,7 +306,7 @@ if __name__ == "__main__":
         update_interval = 100 # nb_examples
     else:
         weight_path = 'random2/'
-        nb_examples = 100 # 60000
+        nb_examples = 101 # 60000
         use_testing_set = False
         ee_STDP_on = True
 
@@ -315,7 +315,7 @@ if __name__ == "__main__":
             print("ERREUR:  Nombre d'examples présentés inférieur au nombre d'images chargées")
         
     n_input = 16
-    n_e = 400 # 400
+    n_e = 100 # 400
     n_i = n_e
     single_example_time = 0.35 * b2.second
     resting_time = 0.15 * b2.second
