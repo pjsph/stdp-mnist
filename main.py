@@ -2,6 +2,7 @@ import time
 
 from matplotlib import contextlib
 import mnist
+import async_signals as async_sig
 import brian2 as b2
 import brian2tools as b2tools
 import numpy as np
@@ -132,14 +133,15 @@ def random_connections(path = 'random2/'):
     np.save(path + 'AiAe', matrix_ie)
     np.save(path + 'XeAe', matrix_input)
 
-def normalize_weights():
+def normalize_weights(sum_value=78.0):
     """Normalize weights so that the sum of all weights going from input neurons
-    to a specific excitatory neuron is 78
+    to a specific excitatory neuron is the number of input neurons
+    divided by the number of classes
     """
     conn_matrix = synapses_input.w
     temp_conn = np.copy(conn_matrix).reshape((n_input, n_e))
     colSums = np.sum(temp_conn, axis = 0)
-    colFactors = 78./colSums
+    colFactors = float(sum_value)/colSums
     for j in range(n_e):
         temp_conn[:,j] *= colFactors[j]
     synapses_input.w = temp_conn.flatten()
@@ -203,8 +205,9 @@ def get_current_performance(performance, current_example_num):
     current_evaluation = int(current_example_num/update_interval)
     start_num = current_example_num - update_interval
     end_num = current_example_num
-    difference = output_numbers[start_num:end_num, 0] - input_numbers[start_num:end_num]
-    correct = len(np.where(difference == 0)[0])
+    correct = len(np.where(output_numbers[start_num:end_num, 0] == input_numbers[start_num:end_num])[0])
+    print('=============', correct)
+    print(output_numbers, "///////", input_numbers)
     performance[current_evaluation] = correct / float(update_interval) * 100
     return performance
 
@@ -241,13 +244,13 @@ def get_recognized_number_ranking(assignments, spike_rates):
         Array storing the recognized numbers sorted by their probability of
         being the actual number
     """
-    summed_rates = [0] * 10
-    num_assignments = [0] * 10
-    for i in range(10):
-        num_assignments[i] = len(np.where(assignments == i)[0])
-        if num_assignments[i] > 0:
-            summed_rates[i] = np.sum(spike_rates[assignments == i]) / num_assignments[i]
-    return np.argsort(summed_rates)[::-1]
+    labels = async_sig.get_labels()
+    summed_rates = [0] * len(labels)
+    for i in range(len(labels)):
+        num_assignments = len(np.where(assignments == labels[i])[0])
+        if num_assignments > 0:
+            summed_rates[i] = np.sum(spike_rates[assignments == labels[i]]) / num_assignments
+    return np.asarray(labels)[np.argsort(summed_rates)[::-1]]
 
 
 def get_new_assignments(result_monitor, input_numbers):
@@ -267,17 +270,17 @@ def get_new_assignments(result_monitor, input_numbers):
         Array storing, for each excitatory neuron, the number it is more likely
         to spike to
     """
-    assignments = np.zeros(n_e)
+    assignments = np.empty(n_e, str)
     input_nums = np.asarray(input_numbers)
     maximum_rate = [0] * n_e
-    for j in range(10):
+    for j in async_sig.get_labels():
         num_assignments = len(np.where(input_nums == j)[0])
         if num_assignments > 0:
             rate = np.sum(result_monitor[input_nums == j], axis = 0) / num_assignments
-        for i in range(n_e):
-            if rate[i] > maximum_rate[i]:
-                maximum_rate[i] = rate[i]
-                assignments[i] = j
+            for i in range(n_e):
+                if rate[i] > maximum_rate[i]:
+                    maximum_rate[i] = rate[i]
+                    assignments[i] = j
     return assignments
 
   
@@ -288,7 +291,7 @@ if __name__ == "__main__":
     # ----------------------------
 
     #only the maximum number of images loaded in the memory.
-    #if not all the 0-9 digits are used, the actual number of
+    #if not all the 0-9 digits are used, the ACtual number of
     #loaded images will be lesser than this maximum
     loaded_training_images = 60000 #60000 (ou None)
     loaded_testing_images = 10000 #10000 (ou None)
@@ -297,13 +300,13 @@ if __name__ == "__main__":
 
     if test_mode:
         weight_path = 'weights/'
-        nb_examples = 100 # 10000
+        nb_examples = 10 # 10000
         use_testing_set = True
         ee_STDP_on = False
-        update_interval = nb_examples
+        update_interval = 100 # nb_examples
     else:
         weight_path = 'random2/'
-        nb_examples = 100 # 60000
+        nb_examples = 30 # 60000
         use_testing_set = False
         ee_STDP_on = True
 
@@ -311,7 +314,7 @@ if __name__ == "__main__":
         if max(loaded_training_images,loaded_testing_images) < nb_examples:
             print("ERREUR:  Nombre d'examples présentés inférieur au nombre d'images chargées")
         
-    n_input = 784
+    n_input = 16
     n_e = 400 # 400
     n_i = n_e
     single_example_time = 0.35 * b2.second
@@ -459,29 +462,29 @@ if __name__ == "__main__":
     synapses_input.delay = 'rand()*10*ms'
 
     # -----------------------------
-    # Load MNIST
+    # Load signals
     # -----------------------------
 
-    print('Loading MNIST data...')
+    print('Loading signals data...')
 
-    start = time.time()
-    training = mnist.get_labeled_data([0, 1], True)
-    end = time.time()
-    print('Loaded training set in:', end - start, "s")
-
-    start = time.time()
-    testing = mnist.get_labeled_data([0, 1], False)
-    end = time.time()
-    print('Loaded testing set in:', end - start, "s")
+#    start = time.time()
+#    training = mnist.get_labeled_data([0, 1], True)
+#    end = time.time()
+#    print('Loaded training set in:', end - start, "s")
+#
+#    start = time.time()
+#    testing = mnist.get_labeled_data([0, 1], False)
+#    end = time.time()
+#    print('Loaded testing set in:', end - start, "s")
     
     # ----------------------------
     # Simulation
     # ----------------------------
 
     previous_spike_count = np.zeros(n_e)
-    assignments = np.zeros(n_e)
+    assignments = np.empty(n_e, str)
     input_numbers = [0] * nb_examples
-    output_numbers = np.zeros((nb_examples, 10))
+    output_numbers = np.empty((nb_examples, len(async_sig.get_labels())), np.dtype('U3'))
 
     if not test_mode:
         weight_data_queue = Queue()
@@ -500,59 +503,63 @@ if __name__ == "__main__":
 
     b2.run(0 * b2.ms)
 
+    number_of_labels = len(async_sig.get_labels())
+
     j = 0
     while j < int(nb_examples):
-        if test_mode:
-            if use_testing_set:
-                rates = [col / 8. * input_intensity * b2.Hz for row in testing[0][j%len(testing[0])] for col in row]
-            else:
-                rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%len(training[0])] for col in row]
-        else:
-            normalize_weights()
-            rates = [col / 8. * input_intensity * b2.Hz for row in training[0][j%len(training[0])] for col in row]
+        signal = async_sig.get_random_signal()
+        
+#=================== Sliding window ===================
+        for i in range (len(signal)- n_input+1):    
+            if len(signal) <= n_input:              #If the size of the signal is smaller than or equal to that of the input data, the signal is kept the same
+                signal = signal
+            else :
+                signal = signal[i:i+n_input]        #If the size of the signal is bigger than that of the input data, a sliding window of the size of the input is created
+                                                    #The window slides through all the signal values to update the input data
+            rates = [digit / 8. * input_intensity * b2.Hz for digit in signal]
 
-        input_group.rates = rates
+            if not test_mode:
+                normalize_weights(n_input/number_of_labels)
 
-        b2.run(single_example_time, report='text')
+            input_group.rates = rates
 
-        if j % update_interval == 0 and j > 0:
-            assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
-        if j % weight_update_interval == 0 and not test_mode:
-            weight_data_queue.put(get_2d_input_weights())
-        if j % save_connections_interval == 0 and j > 0 and not test_mode:
-            save_connections(str(j))
-            save_theta(str(j))
+            b2.run(single_example_time, report='text')
 
-        current_spike_count = np.asarray(spike_counter.count[:]) - previous_spike_count
-        previous_spike_count = np.copy(spike_counter.count[:])
-        print('spiked', sum(current_spike_count), 'times')
-        if sum(current_spike_count) < 5:
-            print('-- Increased intensity')
-            input_intensity += 1
-            input_group.rates = 0
-            b2.run(resting_time)
-        else:
-            print('-- OK')
-            result_monitor[j%update_interval,:] = current_spike_count
-            if test_mode and use_testing_set:
-                input_numbers[j] = testing[1][j%len(testing[1])]
-            else:
-                input_numbers[j] = training[1][j%len(training[1])]
-
-            output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
-
-            print(j)
-            if j % 10 == 0 and j > 0:
-                print('Runs done:', j, 'of', nb_examples)
             if j % update_interval == 0 and j > 0:
-                performance = get_current_performance(performance, j)
-                performance_data_queue.put(performance)
-                print('Classification performance', performance[:(j//update_interval) + 1])
+                assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
+            if j % weight_update_interval == 0 and not test_mode:
+                weight_data_queue.put(get_2d_input_weights())
+            if j % save_connections_interval == 0 and j > 0 and not test_mode:
+                save_connections(str(j))
+                save_theta(str(j))
 
-            input_group.rates = 0
-            b2.run(resting_time)
-            input_intensity = start_input_intensity
-            j += 1
+            current_spike_count = np.asarray(spike_counter.count[:]) - previous_spike_count
+            previous_spike_count = np.copy(spike_counter.count[:])
+            print('spiked', sum(current_spike_count), 'times')
+            if sum(current_spike_count) < 5:
+                print('-- Increased intensity')
+                input_intensity += 1
+                input_group.rates = 0
+                b2.run(resting_time)
+            else:
+                print('-- OK')
+                result_monitor[j%update_interval,:] = current_spike_count
+                input_numbers[j] = signal[0]
+
+                output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
+
+                print(j)
+                if j % 10 == 0 and j > 0:
+                    print('Runs done:', j, 'of', nb_examples)
+                if j % update_interval == 0 and j > 0:
+                    performance = get_current_performance(performance, j)
+                    performance_data_queue.put(performance)
+                    print('Classification performance', performance[:(j//update_interval) + 1])
+
+                input_group.rates = 0
+                b2.run(resting_time)
+                input_intensity = start_input_intensity
+                j += 1
 
     if not test_mode:
         weight_plot_process.join()
