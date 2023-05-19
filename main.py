@@ -283,6 +283,21 @@ def get_new_assignments(result_monitor, input_numbers):
                     assignments[i] = j
     return assignments
 
+def animate_redo_plot(q, runs, redos, n_e, n_input, base_intensity):
+    fig = b2.figure(3, figsize = (5, 5))
+    ax = fig.add_subplot(111)
+    im, = ax.plot(runs, redos)
+    b2.ylim(ymax = 100)
+    b2.title("Amount of redos each "+str(len(runs))+" runs \nfor "+str(n_input)+" input neurons, "+str(n_e)+" exc neurons, \nand a base intensity of "+str(base_intensity))
+
+    def _animate(frame):
+        while not q.empty():
+            redos = q.get()
+            im.set_ydata(redos)
+
+    animation = FuncAnimation(fig, _animate, interval=500, cache_frame_data=False)
+    print("Pourtant ça marche...")
+    b2.show()
   
 if __name__ == "__main__":
 
@@ -300,13 +315,13 @@ if __name__ == "__main__":
 
     if test_mode:
         weight_path = 'weights/'
-        nb_examples = 10 # 10000
+        nb_examples = 10001 # 10000
         use_testing_set = True
         ee_STDP_on = False
-        update_interval = 100 # nb_examples
+        update_interval = 1000 # nb_examples
     else:
         weight_path = 'random2/'
-        nb_examples = 101 # 60000
+        nb_examples = 10001 # 60000
         use_testing_set = False
         ee_STDP_on = True
 
@@ -317,6 +332,7 @@ if __name__ == "__main__":
     n_input = 16
     n_e = 100 # 400
     n_i = n_e
+    minimum_spike_number = 2
     single_example_time = 0.35 * b2.second
     resting_time = 0.15 * b2.second
     runtime = nb_examples * (single_example_time + resting_time)
@@ -324,9 +340,9 @@ if __name__ == "__main__":
         update_interval = 10 # nb_examples
         weight_update_interval = 10
     else:
-        update_interval = 10000
-        weight_update_interval = 100
-    save_connections_interval = 1000
+        update_interval = 100
+        weight_update_interval = 50
+    save_connections_interval = 500
 
     random_connections() # to be sure matrices have the right size
 
@@ -339,7 +355,7 @@ if __name__ == "__main__":
     refrac_e = 5. * b2.ms
     refrac_i = 2. * b2.ms
 
-    input_intensity = 2.
+    input_intensity = 2. #2
     start_input_intensity = input_intensity
 
     tc_pre_ee = 20 * b2.ms
@@ -499,6 +515,16 @@ if __name__ == "__main__":
     performance_plot_process = Process(target=animate_performance_plot, args=(performance_data_queue, time_steps, performance))
     performance_plot_process.start()
 
+    #record how many times the minimum amount of spikes wasn't reached for each run
+    redos = np.zeros(nb_examples)
+    redo_display_interval = 100
+    redos_every_interval = np.zeros(int(nb_examples/redo_display_interval))
+    redo_data_queue = Queue()
+    redo_interval_runs = range(0, int(nb_examples/redo_display_interval))
+    redo_plot_process = Process(target=animate_redo_plot, args=(redo_data_queue, redo_interval_runs, redos_every_interval, n_e, n_input, input_intensity))
+    redo_plot_process.start()
+    current_is_redo = False
+
     input_group.rates = 0
 
     b2.run(0 * b2.ms)
@@ -506,13 +532,16 @@ if __name__ == "__main__":
     number_of_labels = len(signals.get_labels())
 
     j = 0
+    signal = signals.get_random_signal()
     while j < int(nb_examples):
-        signal = signals.get_random_signal()
 
+        if not current_is_redo: #if it's a redo the input must stay the same
+            signal = signals.get_random_signal()
+        
         rates = [digit / 8. * input_intensity * b2.Hz for digit in signal[1]]
 
         if not test_mode:
-            normalize_weights(n_input/number_of_labels)
+            normalize_weights(8.)
 
         input_group.rates = rates
 
@@ -529,11 +558,12 @@ if __name__ == "__main__":
         current_spike_count = np.asarray(spike_counter.count[:]) - previous_spike_count
         previous_spike_count = np.copy(spike_counter.count[:])
         print('spiked', sum(current_spike_count), 'times')
-        if sum(current_spike_count) < 5:
+        if sum(current_spike_count) < minimum_spike_number:
             print('-- Increased intensity')
             input_intensity += 1
             input_group.rates = 0
             b2.run(resting_time)
+            redos[j] += 1
         else:
             print('-- OK')
             result_monitor[j%update_interval,:] = current_spike_count
@@ -541,7 +571,7 @@ if __name__ == "__main__":
 
             output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
 
-            print(j)
+            print("Run",j,"done")
             if j % 10 == 0 and j > 0:
                 print('Runs done:', j, 'of', nb_examples)
             if j % update_interval == 0 and j > 0:
@@ -552,8 +582,15 @@ if __name__ == "__main__":
             input_group.rates = 0
             b2.run(resting_time)
             input_intensity = start_input_intensity
+
+            if ((j+1) % redo_display_interval == 0) and j > 0:
+                redos_every_interval[int((j+1)/redo_display_interval)-1] = sum(redos[(j-redo_display_interval+1):(j+1)])
+                redo_data_queue.put(redos_every_interval)
+
             j += 1
+        
 
     if not test_mode:
         weight_plot_process.join()
     performance_plot_process.join()
+    redo_plot_process.join()
