@@ -53,7 +53,7 @@ def get_matrix_from_file(filename):
     """
     offset = 4
     if filename[-4-offset] == 'X':
-        n_src = n_input
+        n_src = n_input_to_e
     else:
         if filename[-3-offset] == 'e':
             n_src = n_e
@@ -123,10 +123,10 @@ def random_connections(path = 'random2/'):
         j = k % n_e
         matrix_ie[k] = [i, j, 0 if i == j else 17]
 
-    matrix_input = np.zeros((n_input * n_e, 3))
-    for k in range(n_input * n_e):
-        i = k % n_input
-        j = k // n_input
+    matrix_input = np.zeros((n_input_to_e * n_e, 3))
+    for k in range(n_input_to_e * n_e):
+        i = k % n_input_to_e
+        j = k // n_input_to_e
         matrix_input[k] = [i, j, np.random.random() * 0.3 + 0.003]
 
     np.save(path + 'AeAi', matrix_ei)
@@ -300,13 +300,13 @@ if __name__ == "__main__":
 
     if test_mode:
         weight_path = 'weights/'
-        nb_examples = 10 # 10000
+        nb_examples = 1 # 10000
         use_testing_set = True
         ee_STDP_on = False
         update_interval = 100 # nb_examples
     else:
         weight_path = 'random2/'
-        nb_examples = 100 # 60000
+        nb_examples = 1 # 60000
         use_testing_set = False
         ee_STDP_on = True
 
@@ -314,10 +314,12 @@ if __name__ == "__main__":
         if max(loaded_training_images,loaded_testing_images) < nb_examples:
             print("ERREUR:  Nombre d'examples présentés inférieur au nombre d'images chargées")
         
-    n_input = 16
-    n_e = 400 # 400
+    n_input = 1
+    n_input_to_e = 16
+    n_e = 16 # 400
     n_i = n_e
     single_example_time = 0.35 * b2.second
+    single_sample_time = 0.35 / 16 * b2.second
     resting_time = 0.15 * b2.second
     runtime = nb_examples * (single_example_time + resting_time)
     if nb_examples <= 10000:
@@ -377,6 +379,10 @@ if __name__ == "__main__":
             I_synI = gi * nS * (-85. * mV - v) : amp
             dge/dt = -ge/(1.0 * ms) : 1
             dgi/dt = -gi/(2.0 * ms) : 1
+            '''
+
+    neuron_eqs_input_to_e = '''
+            dv/dt = (-65 * mV - v) / (10 * ms) : volt
             '''
 
     eqs_stdp_ee = '''
@@ -444,22 +450,37 @@ if __name__ == "__main__":
     #b2.pause(0.01)
 
     # ----------------------------
+    # Input to e Layer Equations
+    # ----------------------------
+
+    input_to_e_group = b2.NeuronGroup(n_input_to_e, neuron_eqs_input_to_e, threshold='v > -45 * mV', reset='v = 0 * mV')
+    rate_monitor_input = b2.PopulationRateMonitor(input_to_e_group)
+
+    monitor = b2.StateMonitor(input_to_e_group, 'v', record=True)
+
+    weight_matrix_input = get_matrix_from_file(weight_path + 'XeAe.npy')
+    if ee_STDP_on:
+        synapses_input_to_e = b2.Synapses(input_to_e_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
+    else:
+        synapses_input_to_e = b2.Synapses(input_to_e_group, neuron_group_e, 'w : 1', on_pre='ge += w')
+    synapses_input_to_e.connect()
+    synapses_input_to_e.w = weight_matrix_input.flatten()
+    synapses_input_to_e.delay = 'rand()*10*ms'
+
+
+    # ----------------------------
     # Input Layer Equations
     # ----------------------------
 
     print('Creating input layer neuron group and synapses...')
 
     input_group = b2.PoissonGroup(n_input, 0 * b2.Hz)
-    rate_monitor_input = b2.PopulationRateMonitor(input_group)
+    # rate_monitor_input = b2.PopulationRateMonitor(input_group)
 
-    weight_matrix_input = get_matrix_from_file(weight_path + 'XeAe.npy')
-    if ee_STDP_on:
-        synapses_input = b2.Synapses(input_group, neuron_group_e, eqs_stdp_ee, on_pre=eqs_stdp_pre_ee, on_post=eqs_stdp_post_ee)
-    else:
-        synapses_input = b2.Synapses(input_group, neuron_group_e, 'w : 1', on_pre='ge += w')
+    synapses_input = b2.Synapses(input_group, input_to_e_group, 'w : 1', on_pre='v_post += w * mV')
     synapses_input.connect()
-    synapses_input.w = weight_matrix_input.flatten()
-    synapses_input.delay = 'rand()*10*ms'
+    synapses_input.w = '10'
+    synapses_input.delay = 'j*350/16*ms'
 
     # -----------------------------
     # Load signals
@@ -514,9 +535,10 @@ if __name__ == "__main__":
         if not test_mode:
             normalize_weights(n_input/number_of_labels)
 
-        input_group.rates = rates
+        for i in range(len(rates)):
+            input_group.rates = rates[i]
 
-        b2.run(single_example_time, report='text')
+            b2.run(single_example_time, report='text')
 
         if j % update_interval == 0 and j > 0:
             assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
@@ -557,3 +579,10 @@ if __name__ == "__main__":
     if not test_mode:
         weight_plot_process.join()
     performance_plot_process.join()
+
+    b2.plot(monitor.t/b2.ms, monitor.v[0], label='Neuron 0')
+    b2.plot(monitor.t/b2.ms, monitor.v[1], label='Neuron 1')
+    b2.xlabel('Time (ms)')
+    b2.ylabel('v')
+    b2.legend()
+    b2.show()
