@@ -319,7 +319,12 @@ def animate_redo_plot(q, runs, redos, n_e, n_input, base_intensity):
 
 
 
+
+
+
+
 if __name__ == "__main__":
+
 
     # ----------------------------
     # Parameters & 2nd Layer Equations
@@ -336,14 +341,17 @@ if __name__ == "__main__":
         nb_examples = 1001 # 60000
         ee_STDP_on = True
     
-    update_interval = 100 # nb_examples-1 during test phase
-    weight_update_interval = 100
+    update_interval = nb_examples-1 # nb_examples-1 during test phase
+    weight_update_interval = 100 # weight display update interval
     save_connections_interval = 500
 
     n_input = 16
     n_e = 100 # 400
     n_i = n_e
     minimum_spike_number = 2
+    
+    
+    
     single_example_time = 0.35 * b2.second
     resting_time = 0.15 * b2.second
     runtime = nb_examples * (single_example_time + resting_time)
