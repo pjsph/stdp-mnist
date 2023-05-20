@@ -188,14 +188,14 @@ def animate_2d_input_weights(q, n_input, n_e, wmax):
 
 
 def get_current_performance(performance, current_example_num):
-    """Get the network performance over the last 'update_interval' images
+    """Get the network performance over the last 'update_interval' codes
 
     Parameters
     ----------
     performance
         Array storing the performances
     current_example_num
-        Index of the current image the network is training on
+        Index of the current code the network is training on
 
     Returns
     -------
@@ -205,9 +205,9 @@ def get_current_performance(performance, current_example_num):
     current_evaluation = int(current_example_num/update_interval)
     start_num = current_example_num - update_interval
     end_num = current_example_num
-    correct = len(np.where(output_numbers[start_num:end_num, 0] == input_numbers[start_num:end_num])[0])
+    correct = len(np.where(output_codes[start_num:end_num, 0] == input_codes[start_num:end_num])[0])
     print('=============', correct)
-    print(output_numbers, "///////", input_numbers)
+    print(output_codes, "///////", input_codes)
     performance[current_evaluation] = correct / float(update_interval) * 100
     return performance
 
@@ -228,8 +228,8 @@ def animate_performance_plot(q, time_steps, performance):
     b2.show()
 
 
-def get_recognized_number_ranking(assignments, spike_rates):
-    """Get the numbers recognized by the network for a given spike rate
+def get_recognized_code_ranking(assignments, spike_rates):
+    """Get the codes recognized by the network for a given spike rate
 
     Parameters
     ----------
@@ -241,8 +241,8 @@ def get_recognized_number_ranking(assignments, spike_rates):
     Returns
     -------
     array
-        Array storing the recognized numbers sorted by their probability of
-        being the actual number
+        Array storing the recognized codes sorted by their probability of
+        being the actual code
     """
     labels = signals.get_labels()
     summed_rates = [0] * len(labels)
@@ -253,25 +253,25 @@ def get_recognized_number_ranking(assignments, spike_rates):
     return np.asarray(labels)[np.argsort(summed_rates)[::-1]]
 
 
-def get_new_assignments(result_monitor, input_numbers):
+def get_new_assignments(result_monitor, input_codes):
     """Get neuron assignments (i.e class) based on given spike rates
-    over given input numbers
+    over given input codes
 
     Parameters
     ----------
     result_monitor
-        2D array storing, for each input number, the correspong spike rate
-    input_numbers
-        Array storing the input numbers the network has been fed with
+        2D array storing, for each input code, the correspong spike rate
+    input_codes
+        Array storing the input codes the network has been fed with
 
     Returns
     -------
     assignments
-        Array storing, for each excitatory neuron, the number it is more likely
+        Array storing, for each excitatory neuron, the code it is more likely
         to spike to
     """
     assignments = np.empty(n_e, str)
-    input_nums = np.asarray(input_numbers)
+    input_nums = np.asarray(input_codes)
     maximum_rate = [0] * n_e
     for j in signals.get_labels():
         num_assignments = len(np.where(input_nums == j)[0])
@@ -284,11 +284,28 @@ def get_new_assignments(result_monitor, input_numbers):
     return assignments
 
 def animate_redo_plot(q, runs, redos, n_e, n_input, base_intensity):
+    """Plot the number of times, each interval, a run had to be redone because the minimum spike number wasn't reached
+
+    Parameters
+    ----------
+    q
+        The data queue for the redos
+    runs
+        The horizontal axis
+    redos
+    	The vertical axis (the amount of redos)
+    n_e
+    	The number of excitatory neurons
+    n_input
+    	The number of input neurons
+    base_intensity
+    	The indicator on the base intensity on a regular run (without redos)
+    """
     fig = b2.figure(3, figsize = (5, 5))
     ax = fig.add_subplot(111)
     im, = ax.plot(runs, redos)
     b2.ylim(ymax = 100)
-    b2.title("Amount of redos each "+str(len(runs))+" runs \nfor "+str(n_input)+" input neurons, "+str(n_e)+" exc neurons, \nand a base intensity of "+str(base_intensity))
+    b2.title("Amount of redos each "+str(len(runs))+" runs \nfor "+str(n_input)+" input neurons, "+str(n_e)+" exc neurons, \nand a base intensity of "+str(base_intensity)) #serves as a reminder of the parameters
 
     def _animate(frame):
         while not q.empty():
@@ -296,39 +313,33 @@ def animate_redo_plot(q, runs, redos, n_e, n_input, base_intensity):
             im.set_ydata(redos)
 
     animation = FuncAnimation(fig, _animate, interval=500, cache_frame_data=False)
-    print("Pourtant ça marche...")
     b2.show()
-  
+
+
+
+
+
 if __name__ == "__main__":
 
     # ----------------------------
     # Parameters & 2nd Layer Equations
     # ----------------------------
-
-    #only the maximum number of images loaded in the memory.
-    #if not all the 0-9 digits are used, the ACtual number of
-    #loaded images will be lesser than this maximum
-    loaded_training_images = 60000 #60000 (ou None)
-    loaded_testing_images = 10000 #10000 (ou None)
     
     test_mode = False
 
     if test_mode:
         weight_path = 'weights/'
         nb_examples = 10001 # 10000
-        use_testing_set = True
         ee_STDP_on = False
-        update_interval = 1000 # nb_examples
     else:
         weight_path = 'random2/'
-        nb_examples = 10001 # 60000
-        use_testing_set = False
+        nb_examples = 1001 # 60000
         ee_STDP_on = True
+    
+    update_interval = 100 # nb_examples-1 during test phase
+    weight_update_interval = 100
+    save_connections_interval = 500
 
-    if loaded_training_images and loaded_testing_images:
-        if max(loaded_training_images,loaded_testing_images) < nb_examples:
-            print("ERREUR:  Nombre d'examples présentés inférieur au nombre d'images chargées")
-        
     n_input = 16
     n_e = 100 # 400
     n_i = n_e
@@ -336,13 +347,6 @@ if __name__ == "__main__":
     single_example_time = 0.35 * b2.second
     resting_time = 0.15 * b2.second
     runtime = nb_examples * (single_example_time + resting_time)
-    if nb_examples <= 10000:
-        update_interval = 10 # nb_examples
-        weight_update_interval = 10
-    else:
-        update_interval = 100
-        weight_update_interval = 50
-    save_connections_interval = 500
 
     random_connections() # to be sure matrices have the right size
 
@@ -477,30 +481,15 @@ if __name__ == "__main__":
     synapses_input.w = weight_matrix_input.flatten()
     synapses_input.delay = 'rand()*10*ms'
 
-    # -----------------------------
-    # Load signals
-    # -----------------------------
 
-    print('Loading signals data...')
-
-#    start = time.time()
-#    training = mnist.get_labeled_data([0, 1], True)
-#    end = time.time()
-#    print('Loaded training set in:', end - start, "s")
-#
-#    start = time.time()
-#    testing = mnist.get_labeled_data([0, 1], False)
-#    end = time.time()
-#    print('Loaded testing set in:', end - start, "s")
-    
     # ----------------------------
     # Simulation
     # ----------------------------
 
     previous_spike_count = np.zeros(n_e)
     assignments = np.empty(n_e, str)
-    input_numbers = [0] * nb_examples
-    output_numbers = np.empty((nb_examples, len(signals.get_labels())), np.dtype('U3'))
+    input_codes = [0] * nb_examples
+    output_codes = np.empty((nb_examples, len(signals.get_labels())), np.dtype('U3'))
 
     if not test_mode:
         weight_data_queue = Queue()
@@ -541,14 +530,14 @@ if __name__ == "__main__":
         rates = [digit / 8. * input_intensity * b2.Hz for digit in signal[1]]
 
         if not test_mode:
-            normalize_weights(8.)
+            normalize_weights(8.) #len(signal)/number_of_labels
 
         input_group.rates = rates
 
         b2.run(single_example_time, report='text')
 
         if j % update_interval == 0 and j > 0:
-            assignments = get_new_assignments(result_monitor[:], input_numbers[j-update_interval : j])
+            assignments = get_new_assignments(result_monitor[:], input_codes[j-update_interval : j])
         if j % weight_update_interval == 0 and not test_mode:
             weight_data_queue.put(get_2d_input_weights())
         if j % save_connections_interval == 0 and j > 0 and not test_mode:
@@ -567,9 +556,9 @@ if __name__ == "__main__":
         else:
             print('-- OK')
             result_monitor[j%update_interval,:] = current_spike_count
-            input_numbers[j] = signal[0]
+            input_codes[j] = signal[0]
 
-            output_numbers[j,:] = get_recognized_number_ranking(assignments, result_monitor[j%update_interval,:])
+            output_codes[j,:] = get_recognized_code_ranking(assignments, result_monitor[j%update_interval,:])
 
             print("Run",j,"done")
             if j % 10 == 0 and j > 0:
@@ -577,7 +566,7 @@ if __name__ == "__main__":
             if j % update_interval == 0 and j > 0:
                 performance = get_current_performance(performance, j)
                 performance_data_queue.put(performance)
-                print('Classification performance', performance[:(j//update_interval) + 1])
+                print('Detection performance', performance[:(j//update_interval) + 1])
 
             input_group.rates = 0
             b2.run(resting_time)
