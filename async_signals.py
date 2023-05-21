@@ -6,7 +6,7 @@ c2 = [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]
 draw = [('c1', c1), ('c2', c2)]
 board = []
 
-def get_random_signal():                    #Creates a signal on a size N*len(ci) with N the number of codes and ci a given code
+def get_random_signal():                    #Creates a signal of a size N*len(ci) with N the number of codes and ci a given code
     rand = np.random.randint(0, len(draw))
     for i in range(len(draw)):
         sig = signal_to_input(draw[rand][1], 0.05)      #The codes are chosen randomly and noise is added to them
