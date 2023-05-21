@@ -535,6 +535,7 @@ if __name__ == "__main__":
         if not test_mode:
             normalize_weights(n_input/number_of_labels)
 
+        # Send samples to the input neuron in a serial way
         for i in range(len(rates)):
             input_group.rates = rates[i]
 
